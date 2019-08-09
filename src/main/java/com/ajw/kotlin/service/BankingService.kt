@@ -31,26 +31,18 @@ class BankingService {
 
     @Throws(InsufficientFundsException::class, AccountDetailsInvalidException::class)
     fun transfer(transfer: Transfer): Transfer {
-
-        validateTransfer(transfer)
-        makeTransactions(
-                orderTransactions(
-                        transfer.sourceAccountIdentifier,
-                        transfer.destinationAccountIdentifier,
-                        transfer.transferValue
-                )
-        )
+        makeTransactions(orderTransactions(validatedTransfer(transfer)))
         return transfer
     }
 
     private fun getOrCreateAccount(account: Account): AccountAndLock {
         return accounts.computeIfAbsent(
                 account.accountIdentifier
-               ){ ac -> AccountAndLock(Account(ac, account.balance), ReentrantLock()) }
+               ){ AccountAndLock(account, ReentrantLock()) }
     }
 
     private fun makeTransactions(transactions: List<Transaction>) {
-        transactions.forEach { this.makeTransaction( getAccountAndLock(it.accountIdentifier), it) }
+        transactions.forEach { makeTransaction(getAccountAndLock(it.accountIdentifier), it) }
     }
 
     private fun makeTransaction(accountAndLock: AccountAndLock, transaction: Transaction) {
@@ -58,7 +50,7 @@ class BankingService {
             if (!accounts.replace(
                             accountAndLock.account.accountIdentifier,
                             accountAndLock,
-                            addTransactionToAccount(accountAndLock, transaction))
+                            AccountAndLock(applyTransactionToAccount(accountAndLock.account, transaction), accountAndLock.lock))
             ) {
                throw IllegalStateException("Account was in an inconsistent state. Should never be possible.")
             }
@@ -66,7 +58,7 @@ class BankingService {
     }
 
     @Throws(AccountDetailsInvalidException::class)
-    private fun validateTransfer(transfer: Transfer) {
+    private fun validatedTransfer(transfer: Transfer) : Transfer {
 
         accounts[transfer.sourceAccountIdentifier] ?: messageAccountNotFound(transfer.sourceAccountIdentifier)
         accounts[transfer.destinationAccountIdentifier] ?: messageAccountNotFound(transfer.destinationAccountIdentifier)
@@ -75,6 +67,8 @@ class BankingService {
                 getAccountAndLock(transfer.sourceAccountIdentifier).account,
                 transfer.transferValue
         )
+
+        return transfer
     }
 
     @Throws(InsufficientFundsException::class)
@@ -94,28 +88,16 @@ class BankingService {
         )
     }
 
-    private fun addTransactionToAccount(
-            accountAndLock: AccountAndLock,
-            transaction: Transaction) : AccountAndLock {
-
-                return AccountAndLock(
-                        Account(
-                                accountAndLock.account.accountIdentifier,
-                                accountAndLock.account.balance.add(transaction.money)
-                        ),
-                        accountAndLock.lock
-                )
-
+    private fun applyTransactionToAccount(
+            account: Account,
+            transaction: Transaction) : Account {
+        return Account(account.accountIdentifier, account.balance.add(transaction.money))
     }
 
-    private fun orderTransactions(
-            sourceAccountIdentifier: AccountIdentifier,
-            destinationAccountIdentifier: AccountIdentifier,
-            transactionAmount: Money): List<Transaction> {
-
+    private fun orderTransactions(transfer: Transfer): List<Transaction> {
         return listOf(
-                Transaction(sourceAccountIdentifier, transactionAmount.negate()),
-                Transaction(destinationAccountIdentifier, transactionAmount)
+                Transaction(transfer.sourceAccountIdentifier, transfer.transferValue.negate()),
+                Transaction(transfer.destinationAccountIdentifier, transfer.transferValue)
                ).sortedWith(sortByAccountNumberComparator())
     }
 

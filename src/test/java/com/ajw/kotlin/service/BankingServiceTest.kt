@@ -69,6 +69,7 @@ class BankingServiceTest {
         val destinationAccount = givenAccount("2", givenMoney("00.00"))
 
         subject.transfer(Transfer(sourceAccount.accountIdentifier, destinationAccount.accountIdentifier, givenMoney("100.00")))
+
         val retrievedSourceAccount = subject.getAccount(sourceAccount.accountIdentifier)
         val retrievedDestinationAccount = subject.getAccount(destinationAccount.accountIdentifier)
 
