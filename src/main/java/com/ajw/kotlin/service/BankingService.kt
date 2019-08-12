@@ -5,10 +5,15 @@ import com.ajw.kotlin.service.exception.AccountDetailsInvalidException
 import com.ajw.kotlin.service.exception.InsufficientFundsException
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Comparator
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+
+private val INSUFFICIENT_FUNDS_MESSAGE = "Insufficient Funds"
+private val ACCOUNT_NOT_FOUND_MESSAGE = "This account was not found. %s/%s"
+private val ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE = "Account was in an inconsistent state. Should never be possible."
 
 @Service
 class BankingService {
@@ -21,12 +26,9 @@ class BankingService {
 
     @Throws(AccountDetailsInvalidException::class)
     fun getAccount(accountIdentifier: AccountIdentifier): Account {
+
         return accounts[accountIdentifier]?.account ?:
-        throw AccountDetailsInvalidException(
-                String.format("This account was not found. %s/%s",
-                        accountIdentifier.sortCode,
-                        accountIdentifier.accountNumber)
-        )
+        messageAccountNotFound(accountIdentifier)
     }
 
     @Throws(InsufficientFundsException::class, AccountDetailsInvalidException::class)
@@ -52,7 +54,7 @@ class BankingService {
                             accountAndLock,
                             AccountAndLock(applyTransactionToAccount(accountAndLock.account, transaction), accountAndLock.lock))
             ) {
-               throw IllegalStateException("Account was in an inconsistent state. Should never be possible.")
+               throw IllegalStateException(ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE)
             }
         }
     }
@@ -73,16 +75,16 @@ class BankingService {
 
     @Throws(InsufficientFundsException::class)
     private fun validateSourceAccountHasFunds(sourceAccount: Account, transferValue: Money) {
-        if (sourceAccount.balance.subtract(transferValue).getValue() < BigDecimal.ZERO) {
-            throw InsufficientFundsException("Insufficient Funds")
+        if (sourceAccount.balance.subtract(transferValue).getMoney().value < BigDecimal.ZERO) {
+            throw InsufficientFundsException(INSUFFICIENT_FUNDS_MESSAGE)
         }
     }
 
     @Throws(AccountDetailsInvalidException::class)
-    private fun messageAccountNotFound(accountIdentifier: AccountIdentifier) {
+    private fun messageAccountNotFound(accountIdentifier: AccountIdentifier) : Account {
         throw AccountDetailsInvalidException(
                 String.format(
-                        "This account was not found. %s/%s",
+                        ACCOUNT_NOT_FOUND_MESSAGE,
                         accountIdentifier.sortCode,
                         accountIdentifier.accountNumber)
         )
@@ -107,6 +109,22 @@ class BankingService {
 
     private fun sortByAccountNumberComparator() : Comparator<Transaction> {
         return Comparator.comparing { t: Transaction -> t.accountIdentifier.accountNumber }
+    }
+
+    fun Money.add(money :Money) : Money {
+        return Money(this.currency, this.value.add(money.value).setScale(2, RoundingMode.HALF_EVEN))
+    }
+
+    fun Money.subtract(money :Money) : Money {
+        return Money(this.currency, this.value.subtract(money.value).setScale(2, RoundingMode.HALF_EVEN))
+    }
+
+    fun Money.negate() : Money {
+        return Money(this.currency, this.value.negate().setScale(2, RoundingMode.HALF_EVEN))
+    }
+
+    fun Money.getMoney() : Money {
+        return Money(this.currency, this.value.setScale(2, RoundingMode.HALF_EVEN))
     }
 
 }
