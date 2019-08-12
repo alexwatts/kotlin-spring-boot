@@ -3,17 +3,19 @@ package com.ajw.kotlin.service
 import com.ajw.kotlin.model.*
 import com.ajw.kotlin.service.exception.AccountDetailsInvalidException
 import com.ajw.kotlin.service.exception.InsufficientFundsException
+import com.ajw.kotlin.service.exception.NegativeTransferException
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.Comparator
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-private val INSUFFICIENT_FUNDS_MESSAGE = "Insufficient Funds"
-private val ACCOUNT_NOT_FOUND_MESSAGE = "This account was not found. %s/%s"
-private val ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE = "Account was in an inconsistent state. Should never be possible."
+private const val INSUFFICIENT_FUNDS_MESSAGE = "Insufficient Funds"
+private const val ACCOUNT_NOT_FOUND_MESSAGE = "This account was not found. %s/%s"
+private const val ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE = "Account was in an inconsistent state. Should never be possible."
+private const val NEGATIVE_TRANSFER_MESSAGE = "Negative Transfers cannot be made."
+
 
 @Service
 class BankingService {
@@ -26,12 +28,14 @@ class BankingService {
 
     @Throws(AccountDetailsInvalidException::class)
     fun getAccount(accountIdentifier: AccountIdentifier): Account {
-
-        return accounts[accountIdentifier]?.account ?:
-        messageAccountNotFound(accountIdentifier)
+        return accounts[accountIdentifier]?.account ?: messageAccountNotFound(accountIdentifier)
     }
 
-    @Throws(InsufficientFundsException::class, AccountDetailsInvalidException::class)
+    @Throws(
+            InsufficientFundsException::class,
+            AccountDetailsInvalidException::class,
+            NegativeTransferException::class
+    )
     fun transfer(transfer: Transfer): Transfer {
         makeTransactions(orderTransactions(validatedTransfer(transfer)))
         return transfer
@@ -65,6 +69,8 @@ class BankingService {
         accounts[transfer.sourceAccountIdentifier] ?: messageAccountNotFound(transfer.sourceAccountIdentifier)
         accounts[transfer.destinationAccountIdentifier] ?: messageAccountNotFound(transfer.destinationAccountIdentifier)
 
+        validateTransferAmount(transfer.transferValue)
+
         validateSourceAccountHasFunds(
                 getAccountAndLock(transfer.sourceAccountIdentifier).account,
                 transfer.transferValue
@@ -75,8 +81,15 @@ class BankingService {
 
     @Throws(InsufficientFundsException::class)
     private fun validateSourceAccountHasFunds(sourceAccount: Account, transferValue: Money) {
-        if (sourceAccount.balance.subtract(transferValue).getMoney().value < BigDecimal.ZERO) {
+        if ((sourceAccount.balance - transferValue).getValue() < BigDecimal.ZERO) {
             throw InsufficientFundsException(INSUFFICIENT_FUNDS_MESSAGE)
+        }
+    }
+
+    @Throws(NegativeTransferException::class)
+    private fun validateTransferAmount(money: Money) {
+        if (money.getValue() < BigDecimal.ZERO) {
+            throw NegativeTransferException((NEGATIVE_TRANSFER_MESSAGE))
         }
     }
 
@@ -93,7 +106,7 @@ class BankingService {
     private fun applyTransactionToAccount(
             account: Account,
             transaction: Transaction) : Account {
-        return Account(account.accountIdentifier, account.balance.add(transaction.money))
+        return Account(account.accountIdentifier, account.balance + transaction.money)
     }
 
     private fun orderTransactions(transfer: Transfer): List<Transaction> {
@@ -109,22 +122,6 @@ class BankingService {
 
     private fun sortByAccountNumberComparator() : Comparator<Transaction> {
         return Comparator.comparing { t: Transaction -> t.accountIdentifier.accountNumber }
-    }
-
-    fun Money.add(money :Money) : Money {
-        return Money(this.currency, this.value.add(money.value).setScale(2, RoundingMode.HALF_EVEN))
-    }
-
-    fun Money.subtract(money :Money) : Money {
-        return Money(this.currency, this.value.subtract(money.value).setScale(2, RoundingMode.HALF_EVEN))
-    }
-
-    fun Money.negate() : Money {
-        return Money(this.currency, this.value.negate().setScale(2, RoundingMode.HALF_EVEN))
-    }
-
-    fun Money.getMoney() : Money {
-        return Money(this.currency, this.value.setScale(2, RoundingMode.HALF_EVEN))
     }
 
 }

@@ -44,7 +44,7 @@ class AccountControllerTest {
 
     @Test
     fun shouldBeAbleToCreateAnAccount() {
-        val anAccount = Account(AccountIdentifier("67-23-65", "4773267"), Money(Currency.getInstance(Locale.UK), BigDecimal.ZERO))
+        val anAccount = Account(AccountIdentifier("67-23-65", "4773267"), givenMoney("0.00"))
 
         `when`(bankingService.createAccount(anAccount)).thenReturn(anAccount)
 
@@ -60,7 +60,7 @@ class AccountControllerTest {
     fun shouldBeAbleToGetAccount() {
 
         val accountIdentifier = AccountIdentifier("67-23-65", "4773267")
-        val anAccount = Account(accountIdentifier, Money(Currency.getInstance(Locale.UK), BigDecimal.ZERO))
+        val anAccount = Account(accountIdentifier, givenMoney("0.00"))
 
         `when`(bankingService.getAccount(accountIdentifier)).thenReturn(anAccount)
 
@@ -72,4 +72,7 @@ class AccountControllerTest {
         assertThat(retrievedAccount.body, equalTo(anAccount))
     }
 
+    private fun givenMoney(money: String): Money {
+        return Money(Currency.getInstance(Locale.UK), BigDecimal(money))
+    }
 }

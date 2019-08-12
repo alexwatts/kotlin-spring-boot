@@ -3,28 +3,34 @@ package com.ajw.kotlin.model
 import com.fasterxml.jackson.annotation.JsonCreator
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Currency
 
-class Money @JsonCreator
+data class Money @JsonCreator
 constructor(
         @JsonProperty("currency") val currency: Currency,
-        @JsonProperty("value") val value: BigDecimal) {
+        @JsonProperty("value") private val value: BigDecimal) {
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
+    operator fun plus(money: Money): Money =
+            Money(this.currency, this.value.add(money.value).setScale(scale(), rounding()))
 
-        other as Money
+    operator fun minus(money: Money): Money =
+            Money(this.currency, this.value.subtract(money.value).setScale(scale(), rounding()))
 
-        if (currency != other.currency) return false
-        if (value != other.value) return false
-
-        return true
+    fun negate() : Money {
+        return Money(this.currency, this.value.negate().setScale(scale(), rounding()))
     }
 
-    override fun hashCode(): Int {
-        var result = currency.hashCode()
-        result = 31 * result + value.hashCode()
-        return result
+    fun getValue() : BigDecimal {
+        return this.value.setScale(scale(), rounding())
     }
+
+    private fun scale() : Int {
+        return 2
+    }
+
+    private fun rounding() : RoundingMode {
+        return RoundingMode.HALF_EVEN
+    }
+
 }

@@ -6,6 +6,7 @@ import com.ajw.kotlin.model.Money
 import com.ajw.kotlin.model.Transfer
 import com.ajw.kotlin.service.exception.AccountDetailsInvalidException
 import com.ajw.kotlin.service.exception.InsufficientFundsException
+import com.ajw.kotlin.service.exception.NegativeTransferException
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExpectedException
@@ -32,6 +33,12 @@ class BankingServiceTest {
     fun shouldBeAbleToGetAccount() {
         val account = givenAccount("1", givenMoney("00.10"))
         assertThat(subject.getAccount(account.accountIdentifier), equalTo(account))
+    }
+
+    @Test
+    fun shouldBeAbleToGetAccountWhenCreatedWithInvalidScales() {
+        val account = givenAccount("1", givenMoney("00.1000100"))
+        assertThat(subject.getAccount(account.accountIdentifier).balance.getValue(), equalTo(givenMoney("00.10").getValue()))
     }
 
     @Test
@@ -87,6 +94,18 @@ class BankingServiceTest {
         val destinationAccount = givenAccount("2", givenMoney("00.00"))
 
         subject.transfer(Transfer(sourceAccount.accountIdentifier, destinationAccount.accountIdentifier, givenMoney("00.20")))
+    }
+
+    @Test
+    @Throws(Exception::class)
+    fun shouldNotBeAbleToMakeNegativeTransaction() {
+        exception.expect(NegativeTransferException::class.java)
+        exception.expectMessage("Negative Transfers cannot be made.")
+
+        val sourceAccount = givenAccount("1", givenMoney("100.00"))
+        val destinationAccount = givenAccount("2", givenMoney("00.00"))
+
+        subject.transfer(Transfer(sourceAccount.accountIdentifier, destinationAccount.accountIdentifier, givenMoney("-00.20")))
     }
 
     @Test
