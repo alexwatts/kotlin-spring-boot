@@ -11,11 +11,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-private const val INSUFFICIENT_FUNDS_MESSAGE = "Insufficient Funds"
-private const val ACCOUNT_NOT_FOUND_MESSAGE = "This account was not found. %s/%s"
-private const val ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE = "Account was in an inconsistent state. Should never be possible."
-private const val NEGATIVE_TRANSFER_MESSAGE = "Negative Transfers cannot be made."
-
+const val INSUFFICIENT_FUNDS_MESSAGE = "Insufficient Funds."
+const val ACCOUNT_NOT_FOUND_MESSAGE = "This account was not found. %s/%s."
+const val ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE = "Account was in an inconsistent state. Should never be possible."
+const val NEGATIVE_TRANSFER_MESSAGE = "Negative Transfers cannot be made."
 
 @Service
 class BankingService {
@@ -32,9 +31,9 @@ class BankingService {
     }
 
     @Throws(
-            InsufficientFundsException::class,
-            AccountDetailsInvalidException::class,
-            NegativeTransferException::class
+        InsufficientFundsException::class,
+        AccountDetailsInvalidException::class,
+        NegativeTransferException::class
     )
     fun transfer(transfer: Transfer): Transfer {
         makeTransactions(orderTransactions(validatedTransfer(transfer)))
@@ -56,7 +55,10 @@ class BankingService {
             if (!accounts.replace(
                             accountAndLock.account.accountIdentifier,
                             accountAndLock,
-                            AccountAndLock(applyTransactionToAccount(accountAndLock.account, transaction), accountAndLock.lock))
+                            AccountAndLock(
+                                    applyTransactionToAccount(accountAndLock.account, transaction),
+                                    accountAndLock.lock
+                            ))
             ) {
                throw IllegalStateException(ACCOUNT_IN_INCONSISTENT_STATE_MESSAGE)
             }
@@ -66,8 +68,7 @@ class BankingService {
     @Throws(AccountDetailsInvalidException::class)
     private fun validatedTransfer(transfer: Transfer) : Transfer {
 
-        accounts[transfer.sourceAccountIdentifier] ?: messageAccountNotFound(transfer.sourceAccountIdentifier)
-        accounts[transfer.destinationAccountIdentifier] ?: messageAccountNotFound(transfer.destinationAccountIdentifier)
+        validateAccounts(transfer.sourceAccountIdentifier, transfer.destinationAccountIdentifier)
 
         validateTransferAmount(transfer.transferValue)
 
@@ -77,6 +78,11 @@ class BankingService {
         )
 
         return transfer
+    }
+
+    @Throws(AccountDetailsInvalidException::class)
+    private fun validateAccounts(vararg accountIdentifiers: AccountIdentifier) {
+        accountIdentifiers.forEach { accounts[it] ?: messageAccountNotFound(it) }
     }
 
     @Throws(InsufficientFundsException::class)
@@ -99,7 +105,8 @@ class BankingService {
                 String.format(
                         ACCOUNT_NOT_FOUND_MESSAGE,
                         accountIdentifier.sortCode,
-                        accountIdentifier.accountNumber)
+                        accountIdentifier.accountNumber
+                )
         )
     }
 

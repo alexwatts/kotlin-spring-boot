@@ -75,4 +75,5 @@ class AccountControllerTest {
     private fun givenMoney(money: String): Money {
         return Money(Currency.getInstance(Locale.UK), BigDecimal(money))
     }
+
 }
